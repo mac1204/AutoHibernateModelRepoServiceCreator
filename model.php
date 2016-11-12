@@ -13,7 +13,7 @@ $row = mysql_fetch_row($re);
 //print_r($row['1']);
 
 $arr = explode("\n", $row['1']);
-//var_dump($arr);
+//var_dump($arr);die();
 $arr1 = explode(" ", $arr['0']);
 $table_name = str_replace("`","",$arr1['2']);
 $arr1 = explode(" ", $arr['1']);
@@ -46,8 +46,10 @@ $primary_key = str_replace("(`","",$primary_key);
 $keyArray = Array();
 $j = 0;
 //print_r($arr);
+//print_r($arr1);
 //die();
-while($arr1['2'] != 'CONSTRAINT' && $arr1['2'] != 'ENGINE'){
+//echo $arr1['2'];die();
+while($arr1['2'] != 'CONSTRAINT' && !preg_match('/ENGINE/',$arr1['1'])){
 	if($arr1['2'] == 'PRIMARY'){
 		$keyArrayTemp = str_replace("`),","",$arr1['4']);
 		$keyArrayTemp = str_replace("(`","",$keyArrayTemp);
@@ -57,7 +59,11 @@ while($arr1['2'] != 'CONSTRAINT' && $arr1['2'] != 'ENGINE'){
 		$keyArrayTemp = str_replace("(`","",$keyArrayTemp);
 		$keyArray[str_replace("`","",$keyArrayTemp)] = "UNIQUE";
 	} else if($arr1['2'] == 'KEY') {
-		$keyArrayTemp = str_replace("`),","",$arr1['4']);
+		if( strpos($arr1['4'],"`),") !== false ) {
+			$keyArrayTemp = str_replace("`),","",$arr1['4']);
+		} else {
+			$keyArrayTemp = str_replace("`)","",$arr1['4']);
+		}
 		$keyArrayTemp = str_replace("(`","",$keyArrayTemp);
 		if(!array_key_exists(str_replace("`","",$keyArrayTemp), $keyArray)) {
 			$keyArray[str_replace("`","",$keyArrayTemp)] = 1;
@@ -111,7 +117,6 @@ foreach($columnArray as $x => $x_value) {
     $seter.= "\tpublic void set" . snakeToCamelCase($x,true) . "(".$x_value." ".snakeToCamelCase($x).") {\n\t\tthis.".snakeToCamelCase($x)." = ".snakeToCamelCase($x).";\n\t}\n";
 }
 
-//print_r($keyArray);
 $finder = "";
 foreach($keyArray as $x => $x_value) {
     $subKeyArray = explode(",",$x);
@@ -137,7 +142,6 @@ foreach($keyArray as $x => $x_value) {
     }
 }
 
-//echo $finder;
 //die();
 
 //echo $model_header;
