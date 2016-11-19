@@ -18,6 +18,7 @@ $arr1 = explode(" ", $arr['0']);
 $table_name = str_replace("`","",$arr1['2']);
 $arr1 = explode(" ", $arr['1']);
 $columnArray = Array();
+$isNotNullArray = Array();
 $i = 2;
 while($arr1['2'] != 'PRIMARY'){
 	if(preg_match('/int/',$arr1['3'])){
@@ -32,6 +33,11 @@ while($arr1['2'] != 'PRIMARY'){
 		$columnArray[str_replace("`","",$arr1['2'])] = "Timestamp";
 	} else if(preg_match('/decimal/',$arr1['3'])){
 		$columnArray[str_replace("`","",$arr1['2'])] = "Double";
+	}
+	if(preg_match('/NOT/',$arr1['4']) && preg_match('/NULL/',$arr1['5'])) {
+		$isNotNullArray[str_replace("`","",$arr1['2'])] = true;
+	}else {
+		$isNotNullArray[str_replace("`","",$arr1['2'])] = false;
 	}
 	$arr1 = explode(" ", $arr[$i]);
 	$i++;
@@ -79,7 +85,8 @@ $model_header = "package com.mac.model;\n\nimport java.io.Serializable;\n";
 if(in_array("Timestamp",$columnArray)){
 $model_header.= "import java.sql.Timestamp;\n";
 }
-$model_header.= "\nimport javax.persistence.Column;\nimport javax.persistence.Entity;\nimport javax.persistence.Id;\nimport javax.persistence.Table;\n\n@Entity\n@Table(name = \"". $table_name ."\")\npublic class " . snakeToCamelCase($table_name,true) . " implements Serializable {\n";
+$model_header.= "\nimport javax.persistence.Column;\nimport javax.persistence.Entity;\nimport javax.persistence.Id;\nimport javax.persistence.Table;\n\n
+import org.hibernate.validator.constraints.NotBlank;\n\n@Entity\n@Table(name = \"". $table_name ."\")\npublic class " . snakeToCamelCase($table_name,true) . " implements Serializable {\n";
 
 
 $model_footer = "}";
@@ -99,6 +106,9 @@ $repository_footer = "}";
 
 $variable = "";
 foreach($columnArray as $x => $x_value) {
+    if($x_value == "String" && $isNotNullArray[$x]) {
+	$variable.= "\t@NotBlank\n";
+    }
     $variable.= "\tprivate " . $x_value . " " . snakeToCamelCase($x) . ";\n";
 }
 
