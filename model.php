@@ -4,10 +4,13 @@ $server_username = readline("server username: ");
 $server_password = readline("server password: ");
 $database = readline("name the database: ");
 $table = readline("name the table name for which you want to create hibernate model: ");
+$basePackage = readline("Enter the base package name: ");
 $db2 = mysql_pconnect($server_ip,$server_username,$server_password,false);
         mysql_select_db($database,$db2) or die(mysql_error());
-createModel($table, $db2);
-function createModel($table, $db2) {
+createModel($table, $db2, $basePackage);
+
+
+function createModel($table, $db2, $basePackage) {
 $re = mysql_query("show create table ".$table,$db2);
 $row = mysql_fetch_row($re);
 //print_r($row['1']);
@@ -20,7 +23,7 @@ $arr1 = explode(" ", $arr['1']);
 $columnArray = Array();
 $isNotNullArray = Array();
 $i = 2;
-while($arr1['2'] != 'PRIMARY'){
+while($arr1['2'] != 'PRIMARY' && $arr1['2'] != 'CONSTRAINT' && !preg_match('/ENGINE/',$arr1['1'])){
 	if(preg_match('/int/',$arr1['3'])){
 		if(strlen($arr1['3'])<=6 || preg_match('/tinyint/',$arr1['3']) || preg_match('/mediumint/',$arr1['3']) || preg_match('/smallint/',$arr1['3']) ) {
 			$columnArray[str_replace("`","",$arr1['2'])] = "Integer";
@@ -81,7 +84,7 @@ while($arr1['2'] != 'CONSTRAINT' && !preg_match('/ENGINE/',$arr1['1'])){
 }
 
 
-$model_header = "package com.mac.model;\n\nimport java.io.Serializable;\n";
+$model_header = "package ".$basePackage.".model;\n\nimport java.io.Serializable;\n";
 if(in_array("Timestamp",$columnArray)){
 $model_header.= "import java.sql.Timestamp;\n";
 }
@@ -92,12 +95,12 @@ import org.hibernate.validator.constraints.NotBlank;\n\n@Entity\n@Table(name = \
 $model_footer = "}";
 
 
-$repository_header = "package com.mac.dao;\n\nimport java.util.List;\n";
+$repository_header = "package ".$basePackage.".dao;\n\nimport java.util.List;\n";
 if(in_array("Timestamp",$columnArray)){
 $repository_header.= "import java.sql.Timestamp;\n";
 }
 
-$repository_header.= "\nimport org.springframework.data.repository.CrudRepository;\nimport com.mac.model.".snakeToCamelCase($table_name,true).";\n\npublic interface " . snakeToCamelCase($table_name,true) . "Repository extends CrudRepository<".snakeToCamelCase($table_name,true).",".$columnArray[$primary_key].">{\n";
+$repository_header.= "\nimport org.springframework.data.domain.Page;\nimport org.springframework.data.domain.Pageable;\nimport org.springframework.data.repository.CrudRepository;\nimport ".$basePackage.".model.".snakeToCamelCase($table_name,true).";\n\npublic interface " . snakeToCamelCase($table_name,true) . "Repository extends CrudRepository<".snakeToCamelCase($table_name,true).",".$columnArray[$primary_key].">{\n";
 
 
 
@@ -127,7 +130,10 @@ foreach($columnArray as $x => $x_value) {
     $seter.= "\tpublic void set" . snakeToCamelCase($x,true) . "(".$x_value." ".snakeToCamelCase($x).") {\n\t\tthis.".snakeToCamelCase($x)." = ".snakeToCamelCase($x).";\n\t}\n";
 }
 
+$serviceImplUniqueGet = Array();
+$UniqueConatinsType = Array("String"=>false, "Long"=>false, "Double"=>false);
 $finder = "";
+$finder.= "\tpublic Page<".snakeToCamelCase($table_name,true)."> findAll(Pageable pageable);\n";
 foreach($keyArray as $x => $x_value) {
     $subKeyArray = explode(",",$x);
 	//print_r($subKeyArray);die();
@@ -146,12 +152,131 @@ foreach($keyArray as $x => $x_value) {
 	$noncapatalizeWithTypeString.= $columnArray[$y_value]. " " .snakeToCamelCase($y_value);
     }
     if($x_value == "UNIQUE"){
+    	if (strpos($x, ',') === false) {
+    		if($columnArray[$x] == "String"){
+    			$UniqueConatinsType["String"] = true;
+    			$serviceImplUniqueGet["findOneBy".snakeToCamelCase($x,true)."(code);"] = "String";
+    		} else if($columnArray[$x] == "Long"){
+    			$UniqueConatinsType["Long"] = true;
+    			$serviceImplUniqueGet["findOneBy".snakeToCamelCase($x,true)."(Long.parseLong(code));"] = "Long";
+    		} else if($columnArray[$x] == "Double"){
+    			$UniqueConatinsType["Double"] = true;
+    			$serviceImplUniqueGet["findOneBy".snakeToCamelCase($x,true)."(Double.parseDouble(code));"] = "Double";
+    		}
+    	}
 	$finder.= "\tpublic ".snakeToCamelCase($table_name,true)." findOneBy" . $capatalizeNonTypeString . "(" . $noncapatalizeWithTypeString . ");\n";
     } else {
     	$finder.= "\tpublic List<".snakeToCamelCase($table_name,true)."> findAllBy" . $capatalizeNonTypeString . "(" . $noncapatalizeWithTypeString . ");\n";
     }
 }
 
+print_r($serviceImplUniqueGet);
+print_r($UniqueConatinsType);
+$serviceHeader = "package ".$basePackage.".service;\n\nimport org.springframework.data.domain.Page;\nimport org.springframework.data.domain.Pageable;\n\nimport ".$basePackage.".model.".snakeToCamelCase($table_name,true).";\n\npublic interface " . snakeToCamelCase($table_name,true) . "Service {";
+$serviceFuctionArray = Array();
+$serviceFuctionArray[0] = "\tpublic Page<".snakeToCamelCase($table_name,true)."> getAll(Pageable pageable) throws Exception";
+$serviceFuctionArray[1] = "\tpublic ".snakeToCamelCase($table_name,true)." save(".snakeToCamelCase($table_name,true)." ".snakeToCamelCase($table_name).") throws Exception";
+$serviceFuction = "";
+$serviceFunction.= "\tpublic ".snakeToCamelCase($table_name,true)." getBy";
+$ServiceEntryflag = 0;
+foreach($keyArray as $x => $x_value) {
+    $subKeyArray = explode(",",$x);
+	if (strpos($x, ',') === false) {
+		if($x_value == "UNIQUE"){
+		    if($ServiceEntryflag == 0){
+		    	$ServiceEntryflag = 1;
+				$serviceFunction.= "".snakeToCamelCase($x,true)."";
+		    } else {
+		    	$serviceFunction.= "Or".snakeToCamelCase($x,true)."";
+		    }
+		}
+	}
+}
+$serviceFunction.="(String code) throws Exception";
+$serviceFuctionArray[2] = $serviceFunction;
+print_r($serviceFuctionArray);
+$serviceFunction = "\n";
+foreach($serviceFuctionArray as $x => $x_value){
+	$serviceFunction.= $x_value.";\n";
+}
+$serviceFooter = "\n}";
+echo $serviceFunction;
+
+
+$serviceImplHeader = "package ".$basePackage.".service.impl;\n\nimport org.apache.commons.lang.StringUtils;\nimport org.apache.log4j.Logger;\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.data.domain.Page;\nimport org.springframework.data.domain.Pageable;\nimport ".$basePackage.".dao.".snakeToCamelCase($table_name,true)."Repository;\nimport ".$basePackage.".model.".snakeToCamelCase($table_name,true).";\nimport ".$basePackage.".service.".snakeToCamelCase($table_name,true)."Service;\nimport ".$basePackage.".util.CommonUtils;\n\npublic class ".snakeToCamelCase($table_name,true)."ServiceImpl implements ".snakeToCamelCase($table_name,true)."Service {";
+
+$serviceImplFunction = "\n";
+foreach ($serviceFuctionArray as $key => $value) {
+
+	$serviceImplFunction.= "\t@Override\n";
+	$serviceImplFunction.= $value." {\n";
+	if($key == 0) {
+		$serviceImplFunction.= "\t\tif(null == pageable) {\n";
+		$serviceImplFunction.= "\t\t\tlogger.warn(\"Pageable is null.\");\n";
+		$serviceImplFunction.= "\t\t\tpageable = new PageRequest(0,100);\n";
+		$serviceImplFunction.= "\t\t}\n";
+		$serviceImplFunction.= "\t\treturn ".snakeToCamelCase($table_name)."Repository.findAll(pageable);\n";
+
+	}
+	if($key == 1) {
+		$serviceImplFunction.= "\t\tif(CommonUtils.isBlank(".snakeToCamelCase($table_name).")) {\n";
+		$serviceImplFunction.= "\t\t\tlogger.error(\"Input ".snakeToCamelCase($table_name)." can not be null.\");\n";
+		$serviceImplFunction.= "\t\t\tthrow new Exception(\"Input ".snakeToCamelCase($table_name)." can not be null.\");\n";
+		$serviceImplFunction.= "\t\t}\n";
+		$serviceImplFunction.= "\t\treturn ".snakeToCamelCase($table_name)."Repository.save(".snakeToCamelCase($table_name).");\n";
+
+	}
+	if($key == 2) {
+		$serviceImplFunction.= "\t\tif(StringUtils.isBlank(code)) {\n";
+		$serviceImplFunction.= "\t\t\tlogger.error(\"Input code can not be null.\");\n";
+		$serviceImplFunction.= "\t\t\tthrow new Exception(\"Input code can not be null.\");\n";
+		$serviceImplFunction.= "\t\t}\n";
+		$serviceImplFunction.= "\t\t".snakeToCamelCase($table_name,true)." ".snakeToCamelCase($table_name)." = new ".snakeToCamelCase($table_name,true)."();\n";
+		if($UniqueConatinsType["Long"]) {
+			$serviceImplFunction.= "\t\tif(CommonUtils.isLong(code)) {\n";
+			foreach ($serviceImplUniqueGet as $key1 => $value1) {
+				if($value1 == "Long") {
+					$serviceImplFunction.= "\t\t\t".snakeToCamelCase($table_name)." = ".snakeToCamelCase($table_name)."Repository.".$key1."\n";
+					$serviceImplFunction.= "\t\t\tif(null != ".snakeToCamelCase($table_name).") {\n";
+					$serviceImplFunction.= "\t\t\t\treturn ".snakeToCamelCase($table_name).";\n";
+					$serviceImplFunction.= "\t\t\t}\n";
+				}
+			}
+			$serviceImplFunction.= "\t\t}\n";
+		}
+		if($UniqueConatinsType["Double"]) {
+			$serviceImplFunction.= "\t\tif(CommonUtils.isDouble(code)) {\n";
+			foreach ($serviceImplUniqueGet as $key1 => $value1) {
+				if($value1 == "Double") {
+					$serviceImplFunction.= "\t\t\t".snakeToCamelCase($table_name)." = ".snakeToCamelCase($table_name)."Repository.".$key1."\n";
+					$serviceImplFunction.= "\t\t\tif(null != ".snakeToCamelCase($table_name).") {\n";
+					$serviceImplFunction.= "\t\t\t\treturn ".snakeToCamelCase($table_name).";\n";
+					$serviceImplFunction.= "\t\t\t}\n";
+				}
+			}
+			$serviceImplFunction.= "\t\t}\n";
+		}
+		if($UniqueConatinsType["String"]) {
+			$serviceImplFunction.= "\t\telse {\n";
+			foreach ($serviceImplUniqueGet as $key1 => $value1) {
+				if($value1 == "String") {
+					$serviceImplFunction.= "\t\t\t".snakeToCamelCase($table_name)." = ".snakeToCamelCase($table_name)."Repository.".$key1."\n";
+					$serviceImplFunction.= "\t\t\tif(null != ".snakeToCamelCase($table_name).") {\n";
+					$serviceImplFunction.= "\t\t\t\treturn ".snakeToCamelCase($table_name).";\n";
+					$serviceImplFunction.= "\t\t\t}\n";
+				}
+			}
+			$serviceImplFunction.= "\t\t}\n";
+		}
+		$serviceImplFunction.= "\t\treturn ".snakeToCamelCase($table_name).";\n";
+	}
+	$serviceImplFunction.= "\t}\n";
+
+}
+
+echo $serviceImplFunction;
+
+$serviceImplFooter = "\n\tprivate Logger logger = Logger.getLogger(".snakeToCamelCase($table_name,true)."ServiceImpl.class.getName());\n\n\t@Autowire\n\tprivate ".snakeToCamelCase($table_name,true)."Repository ".snakeToCamelCase($table_name)."Repository;\n\n}";
 //die();
 
 //echo $model_header;
@@ -176,6 +301,22 @@ $txt .= $finder;
 $txt .= $repository_footer;
 fwrite($fileRepo, $txt);
 fclose($fileRepo);
+
+
+$fileService = fopen(snakeToCamelCase($table_name,true)."Service.java", "w") or die("Unable to open file!");
+$txt = $serviceHeader;
+$txt .= $serviceFunction;
+$txt .= $serviceFooter;
+fwrite($fileService, $txt);
+fclose($fileService);
+
+$fileImplService = fopen(snakeToCamelCase($table_name,true)."ServiceImpl.java", "w") or die("Unable to open file!");
+$txt = $serviceImplHeader;
+$txt .= $serviceImplFunction;
+$txt .= $serviceImplFooter;
+fwrite($fileImplService, $txt);
+fclose($fileImplService);
+
 }
 
 
