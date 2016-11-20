@@ -9,4 +9,4 @@
 
 ##### Prerequisite :-
 - PHP
-- Java
+- MySQL
