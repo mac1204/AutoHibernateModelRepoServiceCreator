@@ -5,12 +5,38 @@ $server_password = readline("server password: ");
 $database = readline("name the database: ");
 $table = readline("name the table name for which you want to create hibernate model: ");
 $basePackage = readline("Enter the base package name: ");
+$projectName = readline("Enter the project name: ");
 $db2 = mysql_pconnect($server_ip,$server_username,$server_password,false);
         mysql_select_db($database,$db2) or die(mysql_error());
-createModel($table, $db2, $basePackage);
+$packageArray = explode(".",$basePackage);
+$packagePathString = str_replace(".","/",$basePackage);
+makeDir($projectName);
+makeDir($projectName."/src");
+makeDir($projectName."/src/main");
+makeDir($projectName."/src/main/java");
+$path = $projectName."/src/main/java/";
+foreach($packageArray as $x => $x_value) {
+	$path.= $x_value;
+	makeDir($path);
+	echo str_replace("/",".",$path)." package created.\n";
+	$path.= "/";
+}
+
+function makeDir($path)
+{
+     return is_dir($path) || mkdir($path);
+}
+
+createModel($table, $db2, $basePackage, $path);
 
 
-function createModel($table, $db2, $basePackage) {
+function createModel($table, $db2, $basePackage, $path) {
+makeDir($path."service");
+makeDir($path."model");
+makeDir($path."controller");
+makeDir($path."dao");
+makeDir($path."service/impl");
+
 $re = mysql_query("show create table ".$table,$db2);
 $row = mysql_fetch_row($re);
 //print_r($row['1']);
@@ -170,8 +196,8 @@ foreach($keyArray as $x => $x_value) {
     }
 }
 
-print_r($serviceImplUniqueGet);
-print_r($UniqueConatinsType);
+//print_r($serviceImplUniqueGet);
+//print_r($UniqueConatinsType);
 $serviceHeader = "package ".$basePackage.".service;\n\nimport org.springframework.data.domain.Page;\nimport org.springframework.data.domain.Pageable;\n\nimport ".$basePackage.".model.".snakeToCamelCase($table_name,true).";\n\npublic interface " . snakeToCamelCase($table_name,true) . "Service {";
 $serviceFuctionArray = Array();
 $serviceFuctionArray[0] = "\tpublic Page<".snakeToCamelCase($table_name,true)."> getAll(Pageable pageable) throws Exception";
@@ -194,16 +220,16 @@ foreach($keyArray as $x => $x_value) {
 }
 $serviceFunction.="(String code) throws Exception";
 $serviceFuctionArray[2] = $serviceFunction;
-print_r($serviceFuctionArray);
+//print_r($serviceFuctionArray);
 $serviceFunction = "\n";
 foreach($serviceFuctionArray as $x => $x_value){
 	$serviceFunction.= $x_value.";\n";
 }
 $serviceFooter = "\n}";
-echo $serviceFunction;
+//echo $serviceFunction;
 
 
-$serviceImplHeader = "package ".$basePackage.".service.impl;\n\nimport org.apache.commons.lang.StringUtils;\nimport org.apache.log4j.Logger;\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.data.domain.Page;\nimport org.springframework.data.domain.Pageable;\nimport ".$basePackage.".dao.".snakeToCamelCase($table_name,true)."Repository;\nimport ".$basePackage.".model.".snakeToCamelCase($table_name,true).";\nimport ".$basePackage.".service.".snakeToCamelCase($table_name,true)."Service;\nimport ".$basePackage.".util.CommonUtils;\n\npublic class ".snakeToCamelCase($table_name,true)."ServiceImpl implements ".snakeToCamelCase($table_name,true)."Service {";
+$serviceImplHeader = "package ".$basePackage.".service.impl;\n\nimport org.apache.commons.lang.StringUtils;\nimport org.apache.log4j.Logger;\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.stereotype.Service;\nimport org.springframework.data.domain.Page;\nimport org.springframework.data.domain.Pageable;\nimport ".$basePackage.".dao.".snakeToCamelCase($table_name,true)."Repository;\nimport ".$basePackage.".model.".snakeToCamelCase($table_name,true).";\nimport ".$basePackage.".service.".snakeToCamelCase($table_name,true)."Service;\nimport ".$basePackage.".util.CommonUtils;\n\n@Service\npublic class ".snakeToCamelCase($table_name,true)."ServiceImpl implements ".snakeToCamelCase($table_name,true)."Service {";
 
 $serviceImplFunction = "\n";
 foreach ($serviceFuctionArray as $key => $value) {
@@ -274,9 +300,9 @@ foreach ($serviceFuctionArray as $key => $value) {
 
 }
 
-echo $serviceImplFunction;
+//echo $serviceImplFunction;
 
-$serviceImplFooter = "\n\tprivate Logger logger = Logger.getLogger(".snakeToCamelCase($table_name,true)."ServiceImpl.class.getName());\n\n\t@Autowire\n\tprivate ".snakeToCamelCase($table_name,true)."Repository ".snakeToCamelCase($table_name)."Repository;\n\n}";
+$serviceImplFooter = "\n\tprivate Logger logger = Logger.getLogger(".snakeToCamelCase($table_name,true)."ServiceImpl.class.getName());\n\n\t@Autowired\n\tprivate ".snakeToCamelCase($table_name,true)."Repository ".snakeToCamelCase($table_name)."Repository;\n\n}";
 //die();
 
 //echo $model_header;
@@ -285,7 +311,7 @@ $serviceImplFooter = "\n\tprivate Logger logger = Logger.getLogger(".snakeToCame
 //echo $seter;
 //echo $model_footer;
 
-$fileModel = fopen(snakeToCamelCase($table_name,true).".java", "w") or die("Unable to open file!");
+$fileModel = fopen($path."model/".snakeToCamelCase($table_name,true).".java", "w") or die("Unable to open file!");
 $txt = $model_header;
 $txt .= $variable;
 $txt .= $geter;
@@ -295,7 +321,7 @@ fwrite($fileModel, $txt);
 fclose($fileModel);
 
 
-$fileRepo = fopen(snakeToCamelCase($table_name,true)."Repository.java", "w") or die("Unable to open file!");
+$fileRepo = fopen($path."dao/".snakeToCamelCase($table_name,true)."Repository.java", "w") or die("Unable to open file!");
 $txt = $repository_header;
 $txt .= $finder;
 $txt .= $repository_footer;
@@ -303,14 +329,14 @@ fwrite($fileRepo, $txt);
 fclose($fileRepo);
 
 
-$fileService = fopen(snakeToCamelCase($table_name,true)."Service.java", "w") or die("Unable to open file!");
+$fileService = fopen($path."service/".snakeToCamelCase($table_name,true)."Service.java", "w") or die("Unable to open file!");
 $txt = $serviceHeader;
 $txt .= $serviceFunction;
 $txt .= $serviceFooter;
 fwrite($fileService, $txt);
 fclose($fileService);
 
-$fileImplService = fopen(snakeToCamelCase($table_name,true)."ServiceImpl.java", "w") or die("Unable to open file!");
+$fileImplService = fopen($path."service/impl/".snakeToCamelCase($table_name,true)."ServiceImpl.java", "w") or die("Unable to open file!");
 $txt = $serviceImplHeader;
 $txt .= $serviceImplFunction;
 $txt .= $serviceImplFooter;
